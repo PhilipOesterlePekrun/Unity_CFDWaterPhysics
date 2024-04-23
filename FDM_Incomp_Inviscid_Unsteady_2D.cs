@@ -127,7 +127,7 @@ public class FDM_Incomp_Inviscid_Unsteady_2D : MonoBehaviour
                         (-(ALast.Values[2 * (k - 1)] * (ALast.Values[2 * (vectToLin(lV[0] + 1, lV[1])-1)+1] - ALast.Values[2 * (vectToLin(lV[0] - 1, lV[1])-1)+1]) / (2 * dx) +
                         ALast.Values[2 * (k - 1) + 1] * (ALast.Values[2 * (vectToLin(lV[0], lV[1] + 1)-1) + 1] - ALast.Values[2 * (vectToLin(lV[0], lV[1] - 1)-1) + 1]) / (2 * dy)));
 
-                    //with pressure term
+                    //with pressure term//
                 }
             }
             AInTime[n] = ATemp;
