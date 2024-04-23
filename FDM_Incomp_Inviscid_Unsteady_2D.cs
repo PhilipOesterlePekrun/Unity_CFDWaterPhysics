@@ -118,23 +118,16 @@ public class FDM_Incomp_Inviscid_Unsteady_2D : MonoBehaviour
                 }
                 else
                 {
-                    /*// without pressure term:
+                    // without pressure term:
                     DenseVector ALast = AInTime[n - 1];
                     ATemp.Values[2 * (k - 1)] =ALast.Values[2 * (k- 1)]+dt*
                         (-(ALast.Values[2*(k-1)]*(ALast.Values[2 * (vectToLin(lV[0]+1, lV[1])-1)]- ALast.Values[2 * (vectToLin(lV[0]-1, lV[1])-1)])/(2*dx)+
                         ALast.Values[2 * (k - 1)+1] * (ALast.Values[2 * (vectToLin(lV[0], lV[1]+1)-1)] - ALast.Values[2 * (vectToLin(lV[0], lV[1]-1)-1)]) / (2 * dy)));
                     ATemp.Values[2 * (k - 1) + 1] = ALast.Values[2 * (k - 1)+1] + dt *
                         (-(ALast.Values[2 * (k - 1)] * (ALast.Values[2 * (vectToLin(lV[0] + 1, lV[1])-1)+1] - ALast.Values[2 * (vectToLin(lV[0] - 1, lV[1])-1)+1]) / (2 * dx) +
-                        ALast.Values[2 * (k - 1) + 1] * (ALast.Values[2 * (vectToLin(lV[0], lV[1] + 1)-1) + 1] - ALast.Values[2 * (vectToLin(lV[0], lV[1] - 1)-1) + 1]) / (2 * dy)));*/
+                        ALast.Values[2 * (k - 1) + 1] * (ALast.Values[2 * (vectToLin(lV[0], lV[1] + 1)-1) + 1] - ALast.Values[2 * (vectToLin(lV[0], lV[1] - 1)-1) + 1]) / (2 * dy)));
 
-                    //with pressure term
-                    DenseVector ALast = AInTime[n - 1];
-                    ATemp.Values[2 * (k - 1)] = ALast.Values[2 * (k - 1)] + dt *
-                        (-(ALast.Values[2 * (k - 1)] * (ALast.Values[2 * (vectToLin(lV[0] + 1, lV[1]) - 1)] - ALast.Values[2 * (vectToLin(lV[0] - 1, lV[1]) - 1)]) / (2 * dx) +
-                        ALast.Values[2 * (k - 1) + 1] * (ALast.Values[2 * (vectToLin(lV[0], lV[1] + 1) - 1)] - ALast.Values[2 * (vectToLin(lV[0], lV[1] - 1) - 1)]) / (2 * dy)));
-                    ATemp.Values[2 * (k - 1) + 1] = ALast.Values[2 * (k - 1) + 1] + dt *
-                        (-(ALast.Values[2 * (k - 1)] * (ALast.Values[2 * (vectToLin(lV[0] + 1, lV[1]) - 1) + 1] - ALast.Values[2 * (vectToLin(lV[0] - 1, lV[1]) - 1) + 1]) / (2 * dx) +
-                        ALast.Values[2 * (k - 1) + 1] * (ALast.Values[2 * (vectToLin(lV[0], lV[1] + 1) - 1) + 1] - ALast.Values[2 * (vectToLin(lV[0], lV[1] - 1) - 1) + 1]) / (2 * dy)));
+                    //with pressure term//
                 }
             }
             AInTime[n] = ATemp;
