@@ -7,6 +7,7 @@ using static UnityEditor.Searcher.SearcherWindow.Alignment;
 using System.IO;
 using MathNet.Numerics;
 
+//// DISCONTINUED BEFORE DOING PRESSURE
 public class FDM_Incomp_Inviscid_Unsteady_2D : MonoBehaviour
 {
     public GameObject cameraObject;
@@ -24,18 +25,17 @@ public class FDM_Incomp_Inviscid_Unsteady_2D : MonoBehaviour
     double density = 998.23;
     double dx = 0.05;
     double[] xBounds = { 0,4}; // rectangle
-    int xCount; // num of nodes; implicitly given but I don't trust double calculations
+    int xCount; // num of nodes; implicitly given
     double dy = 0.05;
     double[] yBounds = { 0,2}; //
     int yCount; //
     double dt = 0.005;
     double t_f =3;
-    int nCount; // num of time steps; ""
+    int nCount; // num of time steps
 
     DenseVector[] AInTimeGlobal;
 
-    // // misc utility
-
+    // // misc utilities
     float function_sigmoid(float x)
     {
         return 1 / (1 + Mathf.Exp(-x));
@@ -89,8 +89,8 @@ public class FDM_Incomp_Inviscid_Unsteady_2D : MonoBehaviour
         nCount = (int)(t_f / dt) + 1;
         Debug.Log("xCount, yCount, nCount: " + xCount + ", " + yCount + ", " + nCount);
 
-        DenseVector A_0 = new DenseVector(2* vectToLin(xCount, yCount));
-        vectorVisuals = new GameObject[2 * vectToLin(xCount, yCount)];
+        DenseVector A_0 = new DenseVector(3* vectToLin(xCount, yCount));
+        vectorVisuals = new GameObject[3* vectToLin(xCount, yCount)];
         // ICs: hydrostatic equilibrium
         double p_0 = 0; // reference pressure @ y=0m
         for(int k = 1; k <= vectToLin(xCount, yCount); k++)
@@ -98,16 +98,16 @@ public class FDM_Incomp_Inviscid_Unsteady_2D : MonoBehaviour
             int[] lV = linToVect(k);
             if (lV[0] == 1 || lV[0] == xCount || lV[1] == 1 || lV[1] == yCount) // BC
             {
-                A_0.Values[2 * (k - 1)] = 0;
-                A_0.Values[2 * (k - 1) + 1] = 0;
+                A_0.Values[3* (k - 1)] = 0;
+                A_0.Values[3* (k - 1) + 1] = 0;
             }
             //else if // set some initial velocities in some area (smooth, continuous)
             else
             {
-                A_0.Values[2 * (k - 1)] =(double)(Mathf.Max(0,0.2f-0.02f*(0.2f*Mathf.Pow((lV[0]-xCount/2),2)+Mathf.Pow((lV[1]-yCount/2),2))));
-                A_0.Values[2 * (k - 1) + 1] =(double)(Mathf.Max(0,0.2f-0.05f * (Mathf.Pow((lV[0] - xCount / 2), 2) + Mathf.Pow((lV[1] - yCount / 2), 2))));
+                A_0.Values[3* (k - 1)] =(double)(Mathf.Max(0,0.2f-0.02f*(0.2f*Mathf.Pow((lV[0]-xCount/2),2)+Mathf.Pow((lV[1]-yCount/2),2))));
+                A_0.Values[3* (k - 1) + 1] =(double)(Mathf.Max(0,0.2f-0.05f * (Mathf.Pow((lV[0] - xCount / 2), 2) + Mathf.Pow((lV[1] - yCount / 2), 2))));
             }
-            //A_0.Values[k + 2] = p_0 + density*bodyForce.Values[1]*linToVect(k)[1];
+            A_0.Values[(k-1)+2] = p_0 + density*bodyForce.Values[1]*linToVect(k)[1];
 
             // vector visuals:
             vectorVisuals[k] = Object.Instantiate(vectorVisualPrefab, new Vector3(displayMultiplier*(float)((lV[0]-1)*dx), displayMultiplier*(float)((lV[1]-1)*dy), 0),Quaternion.identity,vectorVisualsParent.transform);
@@ -117,25 +117,25 @@ public class FDM_Incomp_Inviscid_Unsteady_2D : MonoBehaviour
         AInTime[0] = A_0;
         for (int n = 1; n <nCount; n++) // t = n * dt // start from second time step which is n=1
         {
-            DenseVector ATemp = new DenseVector(/*3*/ 2 * vectToLin(xCount, yCount)); // this time step
+            DenseVector ATemp = new DenseVector(3* vectToLin(xCount, yCount)); // this time step
             for(int k = 1; k <= vectToLin(xCount, yCount); k++)
             {
                 int[] lV = linToVect(k);
                 if (lV[0] == 1 || lV[0] == xCount || lV[1] == 1 || lV[1] == yCount) // BC
                 {
-                    ATemp.Values[2 * (k - 1)] = 0;
-                    ATemp.Values[2 * (k - 1) + 1] = 0;
+                    ATemp.Values[3* (k - 1)] = 0;
+                    ATemp.Values[3* (k - 1) + 1] = 0;
                 }
                 else
                 {
-                    //without pressure term
+                    //with pressure term
                     DenseVector ALast = AInTime[n - 1];
-                    ATemp.Values[2 * (k - 1)] = ALast.Values[2 * (k - 1)] + dt *
-                        (-(ALast.Values[2 * (k - 1)] * (ALast.Values[2 * (vectToLin(lV[0] + 1, lV[1]) - 1)] - ALast.Values[2 * (vectToLin(lV[0] - 1, lV[1]) - 1)]) / (2 * dx) +
-                        ALast.Values[2 * (k - 1) + 1] * (ALast.Values[2 * (vectToLin(lV[0], lV[1] + 1) - 1)] - ALast.Values[2 * (vectToLin(lV[0], lV[1] - 1) - 1)]) / (2 * dy)));
-                    ATemp.Values[2 * (k - 1) + 1] = ALast.Values[2 * (k - 1) + 1] + dt *
-                        (-(ALast.Values[2 * (k - 1)] * (ALast.Values[2 * (vectToLin(lV[0] + 1, lV[1]) - 1) + 1] - ALast.Values[2 * (vectToLin(lV[0] - 1, lV[1]) - 1) + 1]) / (2 * dx) +
-                        ALast.Values[2 * (k - 1) + 1] * (ALast.Values[2 * (vectToLin(lV[0], lV[1] + 1) - 1) + 1] - ALast.Values[2 * (vectToLin(lV[0], lV[1] - 1) - 1) + 1]) / (2 * dy)));
+                    ATemp.Values[3* (k - 1)] = ALast.Values[3* (k - 1)] + dt *
+                        (-(ALast.Values[3* (k - 1)] * (ALast.Values[3* (vectToLin(lV[0] + 1, lV[1]) - 1)] - ALast.Values[3* (vectToLin(lV[0] - 1, lV[1]) - 1)]) / (2 * dx) +
+                        ALast.Values[3* (k - 1) + 1] * (ALast.Values[3* (vectToLin(lV[0], lV[1] + 1) - 1)] - ALast.Values[3* (vectToLin(lV[0], lV[1] - 1) - 1)]) / (2 * dy)));
+                    ATemp.Values[3* (k - 1) + 1] = ALast.Values[3* (k - 1) + 1] + dt *
+                        (-(ALast.Values[3* (k - 1)] * (ALast.Values[3* (vectToLin(lV[0] + 1, lV[1]) - 1) + 1] - ALast.Values[3* (vectToLin(lV[0] - 1, lV[1]) - 1) + 1]) / (2 * dx) +
+                        ALast.Values[3* (k - 1) + 1] * (ALast.Values[3* (vectToLin(lV[0], lV[1] + 1) - 1) + 1] - ALast.Values[3* (vectToLin(lV[0], lV[1] - 1) - 1) + 1]) / (2 * dy)));
                 }
             }
             AInTime[n] = ATemp;
@@ -161,14 +161,9 @@ public class FDM_Incomp_Inviscid_Unsteady_2D : MonoBehaviour
         for (int k = 1; k <= vectToLin(xCount, yCount); k++)
         {
             GameObject vV = vectorVisuals[k];
-            //vV.transform.Rotate(new Vector3(0, 0, Time.deltaTime * (vV.transform.rotation.z - Mathf.Atan((float)(AInTimeGlobal[n].Values[2 * (k - 1) + 1] / AInTimeGlobal[n].Values[2 * (k - 1)])))),Space.Self);
-            //vV.transform.rotation = Quaternion.Euler(new Vector3(0, 0,45*Mathf.Sin(2*Mathf.PI*Time.time/5)));
-            //vV.transform.localScale = new Vector3((float)AInTimeGlobal[n].Values[2 * (k - 1)],(float)AInTimeGlobal[n].Values[2 * (k - 1) + 1],0);
             vV.GetComponentInChildren<MeshRenderer>().material = new Material(white);
         }
     }
-
-    // Update is called once per frame
     void Update()
     {
         if (Time.time > 2)
@@ -180,13 +175,6 @@ public class FDM_Incomp_Inviscid_Unsteady_2D : MonoBehaviour
             for(int k = 1; k <= vectToLin(xCount, yCount); k++)
             {
                 GameObject vV = vectorVisuals[k];
-                //vV.transform.Rotate(new Vector3(0, 0, Time.deltaTime * (vV.transform.rotation.z - Mathf.Atan((float)(AInTimeGlobal[n].Values[2 * (k - 1) + 1] / AInTimeGlobal[n].Values[2 * (k - 1)])))),Space.Self);
-                //vV.transform.rotation = Quaternion.Euler(new Vector3(0, 0,45*Mathf.Sin(2*Mathf.PI*Time.time/5)));
-                //vV.transform.localScale = new Vector3((float)AInTimeGlobal[n].Values[2 * (k - 1)],(float)AInTimeGlobal[n].Values[2 * (k - 1) + 1],0);
-                //vV.GetComponent<MeshRenderer>().material.color = new Color(255/40*(float)AInTimeGlobal[n].Values[2 * (k - 1)],0,0);
-
-                //vV.transform.localScale = new Vector3(1+vectorScaleFactor*(float)AInTimeGlobal[n].Values[2 * (k - 1)],1+vectorScaleFactor*(float)AInTimeGlobal[n].Values[2 * (k - 1) + 1],1);
-                //vV.transform.localScale = new Vector3(0.5f*(Time.time-2), 0.5f, 0.5f);
 
                 float magnitude =Mathf.Max(-40,Mathf.Min(40,Mathf.Sqrt(Mathf.Pow((float)AInTimeGlobal[n].Values[2 * (k - 1)], 2) + Mathf.Pow((float)AInTimeGlobal[n].Values[2 * (k - 1) + 1], 2))));
 
@@ -195,7 +183,7 @@ public class FDM_Incomp_Inviscid_Unsteady_2D : MonoBehaviour
                     Debug.Log(magnitude);
                 }
                 vV.transform.localScale = vectorScaleFactor*new Vector3(magnitude, 1, 1);
-                vV.transform.rotation = Quaternion.Euler(0, 0, -xYToAngle(AInTimeGlobal[n].Values[2 * (k - 1)], AInTimeGlobal[n].Values[2 * (k - 1) + 1]));
+                vV.transform.rotation = Quaternion.Euler(0, 0, -xYToAngle(AInTimeGlobal[n].Values[3* (k - 1)], AInTimeGlobal[n].Values[3* (k - 1) + 1]));
 
                 MeshRenderer[] mR = vV.GetComponentsInChildren<MeshRenderer>();
                 for(int i=0; i < mR.Length; i++)
