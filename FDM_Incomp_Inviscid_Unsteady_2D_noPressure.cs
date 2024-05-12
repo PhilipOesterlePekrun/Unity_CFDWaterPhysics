@@ -8,7 +8,7 @@ using System.IO;
 using MathNet.Numerics;
 
 //// DISCONTINUED BEFORE DOING PRESSURE
-public class FDM_Incomp_Inviscid_Unsteady_2D : MonoBehaviour
+public class FDM_Incomp_Inviscid_Unsteady_2D_noPressure : MonoBehaviour
 {
     public GameObject cameraObject;
     public GameObject backgroundObject;

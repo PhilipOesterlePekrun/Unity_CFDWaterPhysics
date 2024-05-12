@@ -8,13 +8,17 @@ using System.IO;
 using MathNet.Numerics;
 using static System.Math;
 
-public class FDM_Incomp_Viscous_StaggeredVelocity : MonoBehaviour
+public class FDM_Incomp_Inviscid_2D_StaggeredVelocity: MonoBehaviour
 {
     public GameObject cameraObject;
     public GameObject backgroundObject;
     public GameObject vectorVisualPrefab;
     public GameObject vectorVisualsParent;
-    GameObject[] vectorVisuals;
+    public GameObject cubePrimitivePrefab;
+    public GameObject pVisualsParent;
+    GameObject[] vectorVisualsU; // velocity; staggered; arrows
+    GameObject[] vectorVisualsV; // velocity; staggered; arrows
+    GameObject[] pVisuals; // pressure; standard nodes; colored rectangles
     int displayMultiplier = 150;
     string txtFileName = "Testing1";
     string iterExampleLogFileName = "iterLogExample";
@@ -30,9 +34,10 @@ public class FDM_Incomp_Viscous_StaggeredVelocity : MonoBehaviour
     double viscosity_nu;
 
     // numerical parameters
-    int xCount = 20; // num of nodes; implicitly given
+    // NOTE: I call the pressure nodes the standard nodes, or just nodes, while staggered nodes are specifically denoted as such, usually by variables and methods ending in S
+    int xCount = 20; // num of pressure nodes
     double dx = 0.05;
-    double[] xBounds; // rectangle
+    double[] xBounds; // rectangle; implicitly given
 
     int yCount = 20; //
     double dy = 0.05;
@@ -61,11 +66,27 @@ public class FDM_Incomp_Viscous_StaggeredVelocity : MonoBehaviour
     // // transformations
     int vectToLin(int i, int j) // lexicographic and starts from k=1
     {
-        return ((j - 1) * xCount) + i;
+        return ((j - 1) * xCount) +(i-1);
+    }
+    int vectToLinSU(int i, int j) // staggered U variant
+    {
+        return ((j - 1) * xCount) +(i);
+    }
+    int vectToLinSV(int i, int j) // staggered V variant
+    {
+        return ((j) * xCount) +(i-1);
     }
     int[] linToVect(int k) // lexicographic as above, starts from i=1 and j=1
     {
-        return new int[] { (k - 1) % xCount + 1, 1 + Mathf.FloorToInt((k - 1) / xCount) };
+        return new int[] {1+(k - 1) % xCount, 1 + Mathf.FloorToInt((k - 1) / xCount) };
+    }
+    int[] linToVectSU(int k) // staggered U variant
+    {
+        return new int[] {1+(k - 1) %(xCount), 1 + Mathf.FloorToInt((k - 1) / xCountS) };
+    }
+    int[] linToVectSV(int k) // staggered V variant
+    {
+        return new int[] {1+(k - 1) %(xCount), 1 + Mathf.FloorToInt((k - 1) / xCountS) };
     }
 
     float xYToAngle(double x, double y)
@@ -97,39 +118,51 @@ public class FDM_Incomp_Viscous_StaggeredVelocity : MonoBehaviour
 
     void Start()
     {
+        //var mat=MathNet.Numerics.LinearAlgebra.CreateMatrix.Dense<float>(5,5);
+        //var inv=mat.Inverse();
         // grid
-        xBounds = new double[] { 0, xCount * dx };
-        yBounds = new double[] { 0, yCount * dy };
-        t_f = nCount * dt;
+        xBounds = new double[] { 0,xCount* dx };
+        yBounds = new double[] { 0,yCount* dy };
+        t_f =(nCount+1)* dt;
         Debug.Log("x length,y length, t_f: " + (xBounds[1] - xBounds[0]) + "m , " + (yBounds[1] - yBounds[0]) + "m , " + t_f + "s");
 
         // material properties and constants
         viscosity_nu = density * viscosity_mu;
 
         // vectors and visuals
-        DenseVector A_0 = new DenseVector(3 * vectToLin(xCount, yCount));
-        vectorVisuals = new GameObject[3 * vectToLin(xCount, yCount)];
+        DenseVector U_0= new DenseVector(vectToLinSU(xCount, yCount-1)); // x-component of velocity at staggered nodes
+        DenseVector V_0= new DenseVector(vectToLinSV(xCount-1, yCount)); // y-component " "
+        DenseVector P_0= new DenseVector(vectToLin(xCount-1, yCount-1)); // pressure at pressure/standard nodes
+        vectorVisualsU= new GameObject[vectToLinSU(xCount, yCount-1)];
+        vectorVisualsV= new GameObject[vectToLinSV(xCount-1, yCount)];
+        pVisuals= new GameObject[vectToLin(xCount-1, yCount-1)];
         // ICs: hydrostatic equilibrium
         double p_0 = 0; // reference pressure @ y=0m
         for (int k = 1; k <= vectToLin(xCount, yCount); k++)
         {
             int[] lV = linToVect(k);
+            
+            P_0[k]= p_0 + density * bodyForce.Values[1] * linToVect(k)[1];
+
+            // vector visuals:
+            pVisuals[k] = Object.Instantiate(cubePrimitivePrefab, new Vector3(displayMultiplier * (float)((lV[0] - 1) * dx), displayMultiplier * (float)((lV[1] - 1) * dy), 0), Quaternion.identity, vectorVisualsParent.transform);
+        } ////LEFT OFF HERE
+        for(int k = 1; k <= vectToLinS(xCountS, yCountS); k++)
+        {
+            int[] lV = linToVectS(k);
             if (lV[0] == 1 || lV[0] == xCount || lV[1] == 1 || lV[1] == yCount) // BC
             {
-                A_0.Values[3 * (k - 1)] = 0;
-                A_0.Values[3 * (k - 1) + 1] = 0;
+                U_0[k] = 0;
+                V_0[k] = 0;
             }
             //else if // set some initial velocities in some area (smooth, continuous)
             else
             {
-                A_0.Values[3 * (k - 1)] = (double)(Mathf.Max(0, 0.2f - 0.02f * (0.2f * Mathf.Pow((lV[0] - xCount / 2), 2) + Mathf.Pow((lV[1] - yCount / 2), 2))));
-                A_0.Values[3 * (k - 1) + 1] = (double)(Mathf.Max(0, 0.2f - 0.05f * (Mathf.Pow((lV[0] - xCount / 2), 2) + Mathf.Pow((lV[1] - yCount / 2), 2))));
+                U_0[k]= (double)(Mathf.Max(0, 0.2f - 0.02f * (0.2f * Mathf.Pow((lV[0] - xCount / 2), 2) + Mathf.Pow((lV[1] - yCount / 2), 2))));
+                V_0[k] = (double)(Mathf.Max(0, 0.2f - 0.05f * (Mathf.Pow((lV[0] - xCount / 2), 2) + Mathf.Pow((lV[1] - yCount / 2), 2))));
             }
-            A_0.Values[(k - 1) + 2] = p_0 + density * bodyForce.Values[1] * linToVect(k)[1];
-
-            // vector visuals:
             vectorVisuals[k] = Object.Instantiate(vectorVisualPrefab, new Vector3(displayMultiplier * (float)((lV[0] - 1) * dx), displayMultiplier * (float)((lV[1] - 1) * dy), 0), Quaternion.identity, vectorVisualsParent.transform);
-        }
+        } ////LEFT OFF HERE
 
         DenseVector[] AInTime = new DenseVector[nCount];
         AInTime[0] = A_0;
