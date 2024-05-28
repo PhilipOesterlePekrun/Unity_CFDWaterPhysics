@@ -16,40 +16,41 @@ public class FDM_Incomp_Inviscid_2D_StaggeredVelocity: MonoBehaviour
     public GameObject vectorVisualsParent;
     public GameObject cubePrimitivePrefab;
     public GameObject pVisualsParent;
-    GameObject[] vectorVisualsU; // velocity; staggered; arrows
-    GameObject[] vectorVisualsV; // velocity; staggered; arrows
+    //GameObject[] vectorVisualsU; // velocity; staggered; arrows
+    //GameObject[] vectorVisualsV; // velocity; staggered; arrows
+    GameObject[] vectorVisuals; // actually I will just have the averaged total velocity arrow at the pressure nodes as the velocity visual
     GameObject[] pVisuals; // pressure; standard nodes; colored rectangles
     int displayMultiplier = 150;
     string txtFileName = "Testing1";
     string iterExampleLogFileName = "iterLogExample";
-    int ILE_I = 10;
+    int ILE_I = 10; // Iteratio
     int ILE_J = 10;
     int ILE_N = 10;
     float vectorScaleFactor = 1;
     float replaySpeed = 0.1f;
 
     DenseVector bodyForce = new DenseVector(new double[] { 0, -9.81 });
-    double density = 998.23;
+    const double density = 998.23;
     double viscosity_mu = 1.002 * System.Math.Pow(10, -3);
     double viscosity_nu;
 
     // numerical parameters
     // NOTE: I call the pressure nodes the standard nodes, or just nodes, while staggered nodes are specifically denoted as such, usually by variables and methods ending in S
-    int xCount = 20; // num of pressure nodes
-    double dx = 0.05;
+    const int xCount = 20; // num of pressure nodes
+    const double dx = 0.05;
     double[] xBounds; // rectangle; implicitly given
 
-    int yCount = 20; //
-    double dy = 0.05;
+    const int yCount = 20; //
+    const double dy = 0.05;
     double[] yBounds; //
 
-    int nCount = 20; // num of time steps
-    double dt = 0.01;
+    const int nCount = 20; // num of time steps
+    const double dt = 0.01;
     double t_f;
 
-    int iter_maxSteps = 15; // maximal number of iteration steps for implicit equation solving
-    double iter_tuningCoefficient = 0.1; // [Pa/step]
-    double iter_minError = 0.05; // if lower than this error, no further steps will be taken [Pa]
+    const int iter_maxSteps = 15; // maximal number of iteration steps for implicit equation solving
+    const double iter_tuningCoefficient = 0.1; // [Pa/step]
+    const double iter_minError = 0.05; // if lower than this error, no further steps will be taken [Pa]
 
     DenseVector[] AInTimeGlobal;
 
@@ -82,11 +83,11 @@ public class FDM_Incomp_Inviscid_2D_StaggeredVelocity: MonoBehaviour
     }
     int[] linToVectSU(int k) // staggered U variant
     {
-        return new int[] {1+(k - 1) %(xCount), 1 + Mathf.FloorToInt((k - 1) / xCountS) };
+        return new int[] {1+(k - 1) %(xCount), 1 + Mathf.FloorToInt((k - 1) / xCount) };
     }
     int[] linToVectSV(int k) // staggered V variant
     {
-        return new int[] {1+(k - 1) %(xCount), 1 + Mathf.FloorToInt((k - 1) / xCountS) };
+        return new int[] {1+(k - 1) %(xCount), 1 + Mathf.FloorToInt((k - 1) / xCount) };
     }
 
     float xYToAngle(double x, double y)
@@ -116,6 +117,17 @@ public class FDM_Incomp_Inviscid_2D_StaggeredVelocity: MonoBehaviour
         }
     }
 
+    // // scenario functions (e.g. BC velocities in time and along boundary or body force in time and position)
+    double U_onUpperBoundary(float x,float t)
+    {
+        double frequ = 0.2; // Hz
+        return 0.1f *System.Math.Sin(2 * System.Math.PI * frequ);
+    }
+
+
+    ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
     void Start()
     {
         //var mat=MathNet.Numerics.LinearAlgebra.CreateMatrix.Dense<float>(5,5);
@@ -133,36 +145,63 @@ public class FDM_Incomp_Inviscid_2D_StaggeredVelocity: MonoBehaviour
         DenseVector U_0= new DenseVector(vectToLinSU(xCount, yCount-1)); // x-component of velocity at staggered nodes
         DenseVector V_0= new DenseVector(vectToLinSV(xCount-1, yCount)); // y-component " "
         DenseVector P_0= new DenseVector(vectToLin(xCount-1, yCount-1)); // pressure at pressure/standard nodes
-        vectorVisualsU= new GameObject[vectToLinSU(xCount, yCount-1)];
-        vectorVisualsV= new GameObject[vectToLinSV(xCount-1, yCount)];
         pVisuals= new GameObject[vectToLin(xCount-1, yCount-1)];
+        vectorVisuals = new GameObject[vectToLin(xCount - 1, yCount - 1)];
         // ICs: hydrostatic equilibrium
         double p_0 = 0; // reference pressure @ y=0m
         for (int k = 1; k <= vectToLin(xCount, yCount); k++)
         {
             int[] lV = linToVect(k);
             
-            P_0[k]= p_0 + density * bodyForce.Values[1] * linToVect(k)[1];
+            P_0.Values[k]= p_0 + density * bodyForce.Values[1] * linToVect(k)[1];
 
-            // vector visuals:
+            // visuals:
             pVisuals[k] = Object.Instantiate(cubePrimitivePrefab, new Vector3(displayMultiplier * (float)((lV[0] - 1) * dx), displayMultiplier * (float)((lV[1] - 1) * dy), 0), Quaternion.identity, vectorVisualsParent.transform);
+            vectorVisuals[k] = Object.Instantiate(vectorVisualPrefab, new Vector3(displayMultiplier * (float)((lV[0] - 1) * dx), displayMultiplier * (float)((lV[1] - 1) * dy), 0), Quaternion.identity, vectorVisualsParent.transform);
         } ////LEFT OFF HERE
-        for(int k = 1; k <= vectToLinS(xCountS, yCountS); k++)
+        for(int k = 1; k <= vectToLinSU(xCount, yCount+1); k++) // SU
         {
-            int[] lV = linToVectS(k);
-            if (lV[0] == 1 || lV[0] == xCount || lV[1] == 1 || lV[1] == yCount) // BC
+            int[] lV = linToVectSU(k);
+            if (lV[0] == 1 || lV[0] == xCount || lV[1] == 1) // on boundary except upper
             {
-                U_0[k] = 0;
-                V_0[k] = 0;
+                U_0.Values[k] = 0;
+            }
+            else if(lV[1] == yCount + 1) // on upper boundary
+            {
+                U_0.Values[k] = U_onUpperBoundary(lV[0], 0);
             }
             //else if // set some initial velocities in some area (smooth, continuous)
             else
             {
-                U_0[k]= (double)(Mathf.Max(0, 0.2f - 0.02f * (0.2f * Mathf.Pow((lV[0] - xCount / 2), 2) + Mathf.Pow((lV[1] - yCount / 2), 2))));
-                V_0[k] = (double)(Mathf.Max(0, 0.2f - 0.05f * (Mathf.Pow((lV[0] - xCount / 2), 2) + Mathf.Pow((lV[1] - yCount / 2), 2))));
+                U_0.Values[k] = 0;
+                //U_0[k]= (double)(Mathf.Max(0, 0.2f - 0.02f * (0.2f * Mathf.Pow((lV[0] - xCount / 2), 2) + Mathf.Pow((lV[1] - yCount / 2), 2)))); // ACTUALLY I will just set some velocity boundary conditions instead, for now
             }
-            vectorVisuals[k] = Object.Instantiate(vectorVisualPrefab, new Vector3(displayMultiplier * (float)((lV[0] - 1) * dx), displayMultiplier * (float)((lV[1] - 1) * dy), 0), Quaternion.identity, vectorVisualsParent.transform);
+            //vectorVisualsU[k] = Object.Instantiate(vectorVisualPrefab, new Vector3(displayMultiplier * (float)((lV[0] - 1+0.5f) * dx), displayMultiplier * (float)((lV[1] - 1) * dy), 0), Quaternion.identity, vectorVisualsParent.transform);
         } ////LEFT OFF HERE
+        for (int k = 1; k <= vectToLinSV(xCount+1, yCount); k++) // SV
+        {
+            int[] lV = linToVectSV(k);
+            if (lV[0] == 1 || lV[0] == xCount+1 || lV[1] == 1 || lV[1] == yCount) // on boundary
+            {
+                V_0.Values[k] = 0;
+            }
+            //else if // set some initial velocities in some area (smooth, continuous)
+            else
+            {
+                V_0.Values[k] = 0;
+                //V_0[k] = (double)(Mathf.Max(0, 0.2f - 0.05f * (Mathf.Pow((lV[0] - xCount / 2), 2) + Mathf.Pow((lV[1] - yCount / 2), 2)))); //
+            }
+            //vectorVisualsV[k] = Object.Instantiate(vectorVisualPrefab, new Vector3(displayMultiplier * (float)((lV[0] - 1) * dx), displayMultiplier * (float)((lV[1] - 1+0.5f) * dy), 0), Quaternion.identity, vectorVisualsParent.transform);
+        } ////LEFT OFF HERE
+
+        // assemble A_0
+        DenseVector A_0 = new DenseVector(3*Mathf.Max(U_0.Count, V_0.Count, P_0.Count)); // will not be entirely filled because there are fewer pressure than velocity nodes, and SU and SV node count might also differ
+        for(int k =0; k < A_0.Count; k+=3)
+        {
+            A_0.Values[k] = U_0.Values[k / 3];
+            A_0.Values[k+1] = U_0.Values[k / 3];
+            A_0.Values[k+2] = U_0.Values[k / 3];
+        }
 
         DenseVector[] AInTime = new DenseVector[nCount];
         AInTime[0] = A_0;
@@ -282,3 +321,9 @@ public class FDM_Incomp_Inviscid_2D_StaggeredVelocity: MonoBehaviour
         }
     }
 }
+
+/*
+TODO:
+- newton-raphson iteration
+- convert all float operations and variables to double (use System.Math, which is included thus the call of e.g. double Sin(double x) is a call to System.Math.Sin()
+*/
